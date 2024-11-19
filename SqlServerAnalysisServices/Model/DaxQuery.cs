@@ -1,9 +1,14 @@
-﻿namespace Framework.Model
+﻿using System.Diagnostics.CodeAnalysis;
+
+namespace Framework.Model
 {
     public record DaxQuery
     {
         public string Query { get; init; }
+
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.PublicFields)]
         public object Param { get; init; }
+
         public DaxQuerySettings Settings { get; init; }
     }
 

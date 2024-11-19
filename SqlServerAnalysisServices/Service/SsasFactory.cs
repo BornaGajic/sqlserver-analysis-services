@@ -1,73 +1,51 @@
 ﻿using Framework.Common;
 using Microsoft.AnalysisServices.AdomdClient;
-using Microsoft.AnalysisServices.Tabular;
 using Microsoft.Extensions.DependencyInjection;
-using System.Data;
+using SqlServerAnalysisServices.Service;
 
-namespace Framework.Service
+namespace Framework.Service;
+
+public class SsasFactory : ISsasFactory
 {
-    public class SsasFactory : ISsasFactory
+    private readonly IServiceProvider _serviceProvider;
+
+    public SsasFactory(IServiceProvider serviceProvider) => _serviceProvider = serviceProvider;
+
+    protected Action<ISsasConnectionConfigurator, IServiceProvider> ConnectionBuilderConfigurator { get; set; }
+
+    public virtual ISsas Create()
     {
-        private readonly IServiceProvider _serviceProvider;
+        var scope = _serviceProvider.CreateAsyncScope();
 
-        private readonly SsasConnectionFactory _ssasConnectionFactory = new();
+        var ssas = ActivatorUtilities.CreateInstance<Ssas>(scope.ServiceProvider, InitializeConnection());
+        ssas.Disposed += (sender, args) => scope.Dispose();
 
-        public SsasFactory(IServiceProvider serviceProvider)
-        {
-            _serviceProvider = serviceProvider;
-        }
+        return ssas;
+    }
 
-        protected Action<ISsasConnectionFactoryConfigurator, IServiceProvider> ConnectionBuilderConfigurator { get; set; }
+    public virtual ISsasFactory WithConnection(Action<ISsasConnectionConfigurator, IServiceProvider> builder)
+    {
+        ConnectionBuilderConfigurator = builder;
+        return this;
+    }
 
-        protected virtual ISsasConnectionFactory SsasConnectionFactory => _ssasConnectionFactory;
-        protected virtual ISsasConnectionFactoryConfigurator SsasConnectionFactoryConfigurator => _ssasConnectionFactory;
+    public virtual ISsasFactory WithConnection(Action<ISsasConnectionConfigurator> builder)
+    {
+        ConnectionBuilderConfigurator = (connectionBuilder, _) => builder(connectionBuilder);
+        return this;
+    }
 
-        public virtual ISsas Create()
-        {
-            var scope = Initialize(out var server, out var connection);
+    protected internal virtual AdomdConnection InitializeConnection()
+    {
+        if (ConnectionBuilderConfigurator is null)
+            throw new Exception($"Connection is unconfigured. Call {nameof(WithConnection)}.");
 
-            var ssas = ActivatorUtilities.CreateInstance<Ssas>(scope.ServiceProvider, server, connection);
-            ssas.Disposed += (sender, args) => scope.Dispose();
+        var ssasConnection = new SsasConnection(new AzureTokenService());
 
-            return ssas;
-        }
+        using var connectionFactoryScope = _serviceProvider.CreateAsyncScope();
 
-        public virtual ISsasFactory WithConnection(Action<ISsasConnectionFactoryConfigurator, IServiceProvider> builder)
-        {
-            ConnectionBuilderConfigurator = builder;
-            return this;
-        }
+        ConnectionBuilderConfigurator(ssasConnection, connectionFactoryScope.ServiceProvider);
 
-        public virtual ISsasFactory WithConnection(Action<ISsasConnectionFactoryConfigurator> builder)
-        {
-            ConnectionBuilderConfigurator = (connectionBuilder, _) => builder(connectionBuilder);
-            return this;
-        }
-
-        protected internal virtual IServiceScope Initialize(out Server server, out AdomdConnection adomdConnection)
-        {
-            if (ConnectionBuilderConfigurator is null)
-            {
-                throw new Exception($"Connection is unconfigured. Call {nameof(WithConnection)}.");
-            }
-
-            var ssasConnectionFactoryConfigurator = SsasConnectionFactoryConfigurator;
-
-            var scope = _serviceProvider.CreateScope();
-
-            ConnectionBuilderConfigurator(ssasConnectionFactoryConfigurator, scope.ServiceProvider);
-
-            adomdConnection = SsasConnectionFactory.Create(ssasConnectionFactoryConfigurator.ConnectionString);
-
-            server = new();
-            server.Connect(adomdConnection.ConnectionString);
-
-            if (adomdConnection.State is ConnectionState.Closed)
-            {
-                adomdConnection.Open();
-            }
-
-            return scope;
-        }
+        return ssasConnection.Create();
     }
 }
