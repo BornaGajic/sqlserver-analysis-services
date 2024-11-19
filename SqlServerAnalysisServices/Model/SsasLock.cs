@@ -6,14 +6,6 @@
 public record SsasLock
 {
     /// <summary>
-    /// The unique identifier of the lock, as a GUID.
-    /// </summary>
-    public Guid LOCK_ID { get; init; }
-
-    public int LOCK_STATUS { get; init; }
-    public Guid LOCK_TRANSACTION_ID { get; init; }
-
-    /// <summary>
     /// A bitmask of lock types.
     /// </summary>
     public SsasLockType LOCK_TYPE { get; init; }

@@ -4,5 +4,5 @@ namespace Framework.Common;
 
 public interface ISsasConnectionFactory
 {
-    AdomdConnection Create(string connectionString);
+    AdomdConnection Create();
 }

@@ -4,23 +4,39 @@ namespace Framework.Common;
 
 public interface ISsas : IDisposable
 {
-    void CancelProcessingAsync(string database);
+    void CancelProcessing(string databaseName, CancellationToken cancellation = default);
 
     /// <summary>
-    /// Changes default database.
+    /// Returns additional database information.
     /// </summary>
-    void ChangeDatabase(string database);
+    SsasDatabaseDescription Describe(string databaseName, CancellationToken cancellationToken = default);
+
+    IEnumerable<SsasDatabase> GetDatabases(CancellationToken cancellationToken = default);
+
+    ValueTask<SsasServer> GetServerDetailsAsync(CancellationToken cancellationToken = default);
+
+    IEnumerable<SsasLock> GetSsasLocks(string databaseName = null, CancellationToken cancellation = default);
 
     /// <summary>
-    /// Changes default effective user.
+    /// Checks whether a specific database is being processed or if any are processing
     /// </summary>
-    void ChangeEffectiveUser(string effectiveUserName);
+    bool IsProcessing(string databaseName, CancellationToken cancellation = default);
 
-    IEnumerable<SsasDatabase> GetDatabases();
+    ISsasRoleManager ManageDatabaseRoles(string databaseName);
 
-    int ProcessDatabase(string database, string table = null, string partition = null);
+    bool PauseServer(CancellationToken cancellationToken = default);
+
+    Task<bool> PauseServerAsync(CancellationToken cancellationToken = default);
+
+    int Process(string script, CancellationToken cancellation = default);
 
     IEnumerable<T> Query<T>(string query, object param = null, CancellationToken cancellationToken = default);
 
     IEnumerable<T> Query<T>(DaxQuery query, CancellationToken cancellationToken = default);
+
+    ValueTask<string> SendXmlaRequestAsync(XmlaSoapRequest request, CancellationToken cancellationToken = default);
+
+    bool StartServer(CancellationToken cancellationToken = default);
+
+    Task<bool> StartServerAsync(CancellationToken cancellationToken = default);
 }
