@@ -1,4 +1,4 @@
-﻿namespace Framework.Model;
+﻿namespace SqlServerAnalysisServices.Model;
 
 public record SsasDatabase
 {
@@ -7,6 +7,5 @@ public record SsasDatabase
     public DateTime LastProcessedUtc { get; init; }
     public DateTime LastSchemaUpdateUtc { get; init; }
     public string Model { get; init; }
-    public bool IsProcessing { get; init; }
     public long Size { get; init; }
 }

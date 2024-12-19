@@ -1,4 +1,4 @@
-﻿namespace Framework.Model;
+﻿namespace SqlServerAnalysisServices.Model;
 
 public record SsasDatabaseRole
 {

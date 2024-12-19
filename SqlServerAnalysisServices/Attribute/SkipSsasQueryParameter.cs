@@ -1,4 +1,4 @@
-﻿namespace Framework.Attribute;
+﻿namespace SqlServerAnalysisServices.Attribute;
 
 [AttributeUsage(AttributeTargets.Property)]
 public class SkipSsasQueryParameter : System.Attribute

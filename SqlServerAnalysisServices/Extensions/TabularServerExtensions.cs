@@ -1,4 +1,4 @@
-﻿using Framework.Model;
+﻿using SqlServerAnalysisServices.Model;
 using Microsoft.AnalysisServices.Tabular;
 using System.Data.Common;
 using System.Net.Http.Headers;
@@ -6,7 +6,7 @@ using System.Runtime.Caching;
 using System.Text;
 using System.Text.Json.Serialization;
 
-namespace Framework.Extensions;
+namespace SqlServerAnalysisServices.Extensions;
 
 internal static class TabularServerExtensions
 {

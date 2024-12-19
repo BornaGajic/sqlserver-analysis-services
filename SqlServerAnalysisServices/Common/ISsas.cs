@@ -1,15 +1,12 @@
-﻿using Framework.Model;
+﻿using SqlServerAnalysisServices.Model;
 
-namespace Framework.Common;
+namespace SqlServerAnalysisServices.Common;
 
 public interface ISsas : IDisposable
 {
     void CancelProcessing(string databaseName, CancellationToken cancellation = default);
 
-    /// <summary>
-    /// Returns additional database information.
-    /// </summary>
-    SsasDatabaseDescription Describe(string databaseName, CancellationToken cancellationToken = default);
+    ISsasDatabaseStructure DatabaseStructure(string databaseName);
 
     IEnumerable<SsasDatabase> GetDatabases(CancellationToken cancellationToken = default);
 
@@ -28,6 +25,9 @@ public interface ISsas : IDisposable
 
     Task<bool> PauseServerAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// You can create a script with <see cref="Service.SsasProcessScriptBuilder"/>.
+    /// </summary>
     int Process(string script, CancellationToken cancellation = default);
 
     IEnumerable<T> Query<T>(string query, object param = null, CancellationToken cancellationToken = default);

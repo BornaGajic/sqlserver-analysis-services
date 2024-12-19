@@ -1,6 +1,6 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 
-namespace Framework.Model
+namespace SqlServerAnalysisServices.Model
 {
     public record DaxQuery
     {

@@ -1,10 +1,10 @@
 ﻿using FastMember;
-using Framework.Attribute;
-using Framework.Model;
+using SqlServerAnalysisServices.Attribute;
+using SqlServerAnalysisServices.Model;
 using Microsoft.AnalysisServices.AdomdClient;
 using System.Data;
 
-namespace Framework.Extensions;
+namespace SqlServerAnalysisServices.Extensions;
 
 internal static class AdomdConnectionExstensions
 {

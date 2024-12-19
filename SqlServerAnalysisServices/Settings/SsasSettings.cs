@@ -1,6 +1,6 @@
-﻿using Framework.Common;
+﻿using SqlServerAnalysisServices.Common;
 
-namespace Framework.Settings;
+namespace SqlServerAnalysisServices.Settings;
 
 public record SsasSettings : IConfigurationSetting
 {

@@ -1,21 +1,17 @@
 ﻿using Dapper;
-using Framework.Common;
-using Framework.Model;
+using SqlServerAnalysisServices.Common;
+using SqlServerAnalysisServices.Model;
 using Microsoft.AnalysisServices.AdomdClient;
 using TOM = Microsoft.AnalysisServices.Tabular;
 using Microsoft.Extensions.DependencyInjection;
-using SqlServerAnalysisServices.Service;
-using Framework.Extensions;
+using SqlServerAnalysisServices.Extensions;
 using Azure.ResourceManager.Analysis;
 using Azure.ResourceManager;
 
-namespace Framework.Service
+namespace SqlServerAnalysisServices.Service
 {
-    // DMV query: https://www.sqlservercentral.com/articles/monitor-current-analysis-services-activity
-    // As is the code below is not production ready, mostly lacks caching.
     public class Ssas : ISsas
     {
-        protected readonly HashSet<string> _environmentDatabases;
         protected bool _disposed;
         private readonly AdomdConnection _rootConnection;
 
@@ -69,68 +65,7 @@ namespace Framework.Service
 
         public virtual void ChangeEffectiveUser(string effectiveUserName) => _rootConnection.ChangeEffectiveUser(effectiveUserName);
 
-        // Should be cached
-        public SsasDatabaseDescription Describe(string databaseName, CancellationToken cancellation = default)
-        {
-            using var connection = GetConnection();
-            connection.Open();
-            connection.ChangeDatabase(databaseName);
-
-            using var server = GetServer();
-
-            var database = server.Databases.FindByName(databaseName);
-            database.Refresh(false, Microsoft.AnalysisServices.RefreshType.LoadedObjectsOnly);
-
-            var tableRowCounts = connection.Query<SsasTableRowCount>(new CommandDefinition("SELECT [DIMENSION_CAPTION] AS [TableName], [DIMENSION_CARDINALITY] AS [RowCount] FROM [$SYSTEM].[MDSchema_Dimensions]", cancellationToken: cancellation));
-            var partitionRowCounts = connection.Query<SsasPartitionRowCount>(new CommandDefinition("SELECT [DIMENSION_NAME] AS [TableName], [PARTITION_NAME] AS [PartitionName], [RECORDS_COUNT] AS [RowCount] FROM [$SYSTEM].[DISCOVER_STORAGE_TABLE_COLUMN_SEGMENTS] WHERE [COMPRESSION_TYPE] = 'C123'", cancellationToken: cancellation));
-            var tableSizes = connection.Query<SsasTableSize>(new CommandDefinition("SELECT [DIMENSION_NAME] AS [TableName], [DICTIONARY_SIZE] AS [Size] FROM [$SYSTEM].[DISCOVER_STORAGE_TABLE_COLUMNS] WHERE [DICTIONARY_SIZE] > 0", cancellationToken: cancellation));
-            var partitionSizes = connection.Query<SsasPartitionSize>(new CommandDefinition("SELECT [DIMENSION_NAME] AS [TableName], [PARTITION_NAME] AS [PartitionName], [USED_SIZE] AS [Size] FROM [$SYSTEM].[DISCOVER_STORAGE_TABLE_COLUMN_SEGMENTS] WHERE [USED_SIZE] > 0", cancellationToken: cancellation));
-
-            var tableDescriptions = database.Model.Tables
-                .Select(table => new SsasTableDescription
-                {
-                    Id = table.Name,
-                    Name = table.Name,
-                    ModifiedTime = table.ModifiedTime.ToUniversalTime(),
-                    StructureModifiedTime = table.StructureModifiedTime.ToUniversalTime(),
-                    RowCount = tableRowCounts.Single(row => row.TableName == table.Name).RowCount,
-                    Size = tableSizes.Concat(partitionSizes.OfType<SsasTableSize>()).Where(row => row.TableName == table.Name).Sum(row => row.Size),
-                    Partitions = table.Partitions
-                        .Select(partition => new SsasPartitionDescription
-                        {
-                            Id = partition.Name,
-                            Name = partition.Name,
-                            ModifiedTime = partition.ModifiedTime.ToUniversalTime(),
-                            RefreshedTime = partition.RefreshedTime.ToUniversalTime(),
-                            RowCount = partitionRowCounts
-                                .Where(row =>
-                                    row.TableName == table.Name
-                                    && row.PartitionName == partition.Name
-                                )
-                                .Sum(row => row.RowCount),
-                            Size = partitionSizes
-                                .Where(row =>
-                                    row.TableName == table.Name
-                                    && row.PartitionName == partition.Name
-                                )
-                                .Sum(row => row.Size)
-                        })
-                        .OrderBy(p => p.Name)
-                        .ToList()
-                })
-                .OrderBy(p => p.Name)
-                .ToList();
-
-            return new SsasDatabaseDescription
-            {
-                Id = database.ID,
-                Name = database.Name,
-                Model = database.Model.Name,
-                Size = database.EstimatedSize,
-                LastProcessed = database.LastProcessed.ToUniversalTime(),
-                Tables = tableDescriptions
-            };
-        }
+        public ISsasDatabaseStructure DatabaseStructure(string databaseName) => new SsasDatabaseStructure(databaseName, this);
 
         public void Dispose()
         {
@@ -146,18 +81,7 @@ namespace Framework.Service
             {
                 cancellation.ThrowIfCancellationRequested();
 
-                database.Refresh();
-
-                yield return new SsasDatabase
-                {
-                    Id = database.ID,
-                    Name = database.Name,
-                    Model = database.Model.Name,
-                    Size = database.EstimatedSize,
-                    LastProcessedUtc = database.LastProcessed.ToUniversalTime(),
-                    LastSchemaUpdateUtc = database.LastSchemaUpdate.ToUniversalTime(),
-                    IsProcessing = IsProcessing(database.Name, cancellation)
-                };
+                yield return DatabaseStructure(database.Name).Properties();
             }
         }
 
@@ -218,7 +142,6 @@ namespace Framework.Service
         public bool IsProcessing(string databaseName = null, CancellationToken cancellation = default)
             => GetSsasLocks(databaseName, cancellation).Any(@lock => @lock.LOCK_TYPE is SsasLockType.LOCK_WRITE or SsasLockType.LOCK_READ);
 
-        // Should be cached
         public ISsasRoleManager ManageDatabaseRoles(string databaseName) => new SsasRoleManager(databaseName, this);
 
         public bool PauseServer(CancellationToken cancellationToken = default)
@@ -243,6 +166,7 @@ namespace Framework.Service
             return result?.HasCompleted ?? false;
         }
 
+        // <inheritdoc/>
         public virtual int Process(string script, CancellationToken cancellation = default)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(script);

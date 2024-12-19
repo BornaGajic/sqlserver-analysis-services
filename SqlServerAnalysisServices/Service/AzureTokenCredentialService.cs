@@ -3,11 +3,11 @@ using Azure.Identity;
 using SqlServerAnalysisServices.Model;
 using System.Runtime.Caching;
 
-namespace Framework.Service;
+namespace SqlServerAnalysisServices.Service;
 
-public class AzureTokenService
+public class AzureTokenCredentialService
 {
-    private readonly MemoryCache _credentialCache = new MemoryCache(nameof(AzureTokenService));
+    private readonly MemoryCache _credentialCache = new MemoryCache(nameof(AzureTokenCredentialService));
 
     public TokenCredential GetAzureTokenCredential(AzureResource azureResource)
     {

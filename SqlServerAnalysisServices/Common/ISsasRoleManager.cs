@@ -1,6 +1,6 @@
-﻿using Framework.Model;
+﻿using SqlServerAnalysisServices.Model;
 
-namespace Framework.Common;
+namespace SqlServerAnalysisServices.Common;
 
 public interface ISsasRoleManager
 {

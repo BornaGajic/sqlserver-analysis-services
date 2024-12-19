@@ -1,6 +1,6 @@
 ﻿using System.Xml;
 
-namespace Framework.Extensions;
+namespace SqlServerAnalysisServices.Extensions;
 
 public class XmlaParsing
 {
