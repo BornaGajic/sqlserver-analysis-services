@@ -1,6 +1,6 @@
 ﻿using SqlServerAnalysisServices.Model;
 
-namespace Framework.Common;
+namespace SqlServerAnalysisServices.Common;
 
 public interface ISsasConnectionConfigurator
 {

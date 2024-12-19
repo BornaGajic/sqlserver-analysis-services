@@ -1,6 +1,6 @@
 ﻿using Microsoft.AnalysisServices.AdomdClient;
 
-namespace Framework.Common;
+namespace SqlServerAnalysisServices.Common;
 
 public interface ISsasConnectionFactory
 {

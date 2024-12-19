@@ -1,4 +1,4 @@
-﻿namespace Framework.Common;
+﻿namespace SqlServerAnalysisServices.Common;
 
 public interface IConfigurationSetting
 {

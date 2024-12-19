@@ -1,9 +1,8 @@
-﻿using Framework.Common;
+﻿using SqlServerAnalysisServices.Common;
 using Microsoft.AnalysisServices.AdomdClient;
 using Microsoft.Extensions.DependencyInjection;
-using SqlServerAnalysisServices.Service;
 
-namespace Framework.Service;
+namespace SqlServerAnalysisServices.Service;
 
 public class SsasFactory : ISsasFactory
 {
@@ -35,12 +34,12 @@ public class SsasFactory : ISsasFactory
         return this;
     }
 
-    protected internal virtual AdomdConnection InitializeConnection()
+    protected virtual AdomdConnection InitializeConnection()
     {
         if (ConnectionBuilderConfigurator is null)
             throw new Exception($"Connection is unconfigured. Call {nameof(WithConnection)}.");
 
-        var ssasConnection = new SsasConnection(new AzureTokenService());
+        var ssasConnection = new SsasConnection(new AzureTokenCredentialService());
 
         using var connectionFactoryScope = _serviceProvider.CreateAsyncScope();
 

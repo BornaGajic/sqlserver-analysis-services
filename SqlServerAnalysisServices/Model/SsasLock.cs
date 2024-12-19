@@ -1,4 +1,4 @@
-﻿namespace Framework.Model;
+﻿namespace SqlServerAnalysisServices.Model;
 
 /// <summary>
 /// More info: https://learn.microsoft.com/en-us/openspecs/sql_server_protocols/ms-ssas/3b0b02b1-ca61-4673-87b1-03c893442a1d

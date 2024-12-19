@@ -1,12 +1,14 @@
-﻿using Framework.Common;
-using Framework.Model;
-using Framework.Service;
+﻿using SqlServerAnalysisServices.Common;
+using SqlServerAnalysisServices.Model;
+using System.Runtime.Caching;
 using TOM = Microsoft.AnalysisServices.Tabular;
 
 namespace SqlServerAnalysisServices.Service;
 
 internal class SsasRoleManager : ISsasRoleManager
 {
+    private const int CacheDurationMinutes = 5;
+    private static readonly MemoryCache _cache = new MemoryCache($"{nameof(SsasRoleManager)}");
     private readonly string _databaseName;
     private readonly Ssas _parent;
 
@@ -20,20 +22,30 @@ internal class SsasRoleManager : ISsasRoleManager
     {
         get
         {
-            using var server = _parent.GetServer();
-            var db = server.Databases.FindByName(_databaseName);
+            var cacheKey = RolesCacheKey();
+            var roles = _cache.Get(cacheKey) as IEnumerable<SsasDatabaseRole>;
 
-            return db.Model.Roles.Select(role => new SsasDatabaseRole
+            if (roles is null)
             {
-                Name = role.Name,
-                Description = role.Description,
-                Permission = role.ModelPermission switch
+                using var server = _parent.GetServer();
+                var db = server.Databases.FindByName(_databaseName);
+
+                roles = db.Model.Roles.Select(role => new SsasDatabaseRole
                 {
-                    TOM.ModelPermission.Administrator => SsasRolePermission.Administrator,
-                    TOM.ModelPermission.ReadRefresh => SsasRolePermission.ReadRefresh,
-                    _ => SsasRolePermission.Read
-                }
-            });
+                    Name = role.Name,
+                    Description = role.Description,
+                    Permission = role.ModelPermission switch
+                    {
+                        TOM.ModelPermission.Administrator => SsasRolePermission.Administrator,
+                        TOM.ModelPermission.ReadRefresh => SsasRolePermission.ReadRefresh,
+                        _ => SsasRolePermission.Read
+                    }
+                });
+
+                _cache.Set(cacheKey, roles, DateTime.Now.AddMinutes(CacheDurationMinutes));
+            }
+
+            return roles;
         }
     }
 
@@ -85,6 +97,7 @@ internal class SsasRoleManager : ISsasRoleManager
         }
 
         role.Model.SaveChanges();
+        _cache.Remove(RoleExternalMembersCacheKey(roleName));
 
         return result;
     }
@@ -119,11 +132,12 @@ internal class SsasRoleManager : ISsasRoleManager
         });
 
         db.Model.SaveChanges();
+        _cache.Remove(RolesCacheKey());
     }
 
-    public void DeleteRole(string name)
+    public void DeleteRole(string roleName)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentException.ThrowIfNullOrWhiteSpace(roleName);
 
         if (_parent.IsProcessing(_databaseName))
         {
@@ -133,42 +147,53 @@ internal class SsasRoleManager : ISsasRoleManager
         using var server = _parent.GetServer();
         var db = server.Databases.FindByName(_databaseName);
 
-        if (!db.Model.Roles.ContainsName(name))
+        if (!db.Model.Roles.ContainsName(roleName))
         {
-            throw new Exception($"Role '{name}' does not exist.");
+            throw new Exception($"Role '{roleName}' does not exist.");
         }
 
-        db.Model.Roles.Remove(name);
+        db.Model.Roles.Remove(roleName);
 
         db.Model.SaveChanges();
+        _cache.Remove(RolesCacheKey());
     }
 
     public IEnumerable<SsasRoleMember> GetRoleExternalMembers(string roleName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(roleName);
 
-        using var server = _parent.GetServer();
-        var db = server.Databases.FindByName(_databaseName);
-        var role = db.Model.Roles.Find(roleName) ?? throw new Exception($"Role: '{roleName}' does not exist.");
+        var cacheKey = RoleExternalMembersCacheKey(roleName);
+        var members = _cache.Get(cacheKey) as ICollection<SsasRoleMember>;
 
-        return role.Members
-            .Select(member => new SsasRoleMember
-            {
-                IdentityProvider = "AzureAD",
-                Name = member.Name,
-                Role = new SsasDatabaseRole
+        if (members is null)
+        {
+            using var server = _parent.GetServer();
+            var db = server.Databases.FindByName(_databaseName);
+            var role = db.Model.Roles.Find(roleName) ?? throw new Exception($"Role: '{roleName}' does not exist.");
+
+            members = role.Members
+                .Select(member => new SsasRoleMember
                 {
-                    Description = role.Description,
-                    Name = role.Name,
-                    Permission = role.ModelPermission switch
+                    IdentityProvider = "AzureAD",
+                    Name = member.Name,
+                    Role = new SsasDatabaseRole
                     {
-                        TOM.ModelPermission.Administrator => SsasRolePermission.Administrator,
-                        TOM.ModelPermission.ReadRefresh => SsasRolePermission.ReadRefresh,
-                        _ => SsasRolePermission.Read
+                        Description = role.Description,
+                        Name = role.Name,
+                        Permission = role.ModelPermission switch
+                        {
+                            TOM.ModelPermission.Administrator => SsasRolePermission.Administrator,
+                            TOM.ModelPermission.ReadRefresh => SsasRolePermission.ReadRefresh,
+                            _ => SsasRolePermission.Read
+                        }
                     }
-                }
-            })
-            .ToList();
+                })
+                .ToList();
+
+            _cache.Set(cacheKey, members, DateTime.Now.AddMinutes(CacheDurationMinutes));
+        }
+
+        return members;
     }
 
     public int RemoveMembers(string roleName, params string[] memberNames)
@@ -200,6 +225,7 @@ internal class SsasRoleManager : ISsasRoleManager
             }
 
             role.Model.SaveChanges();
+            _cache.Remove(RoleExternalMembersCacheKey(roleName));
 
             return affected;
         }
@@ -207,9 +233,9 @@ internal class SsasRoleManager : ISsasRoleManager
         throw new Exception($"Role '{roleName}' does not exist.");
     }
 
-    public void UpdateRole(string name, SsasDatabaseRole updated)
+    public void UpdateRole(string roleName, SsasDatabaseRole updated)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentException.ThrowIfNullOrWhiteSpace(roleName);
 
         if (_parent.IsProcessing(_databaseName))
         {
@@ -218,7 +244,7 @@ internal class SsasRoleManager : ISsasRoleManager
 
         using var server = _parent.GetServer();
         var db = server.Databases.FindByName(_databaseName);
-        var role = db.Model.Roles.Find(name) ?? throw new Exception($"Role '{name}' does not exists."); ;
+        var role = db.Model.Roles.Find(roleName) ?? throw new Exception($"Role '{roleName}' does not exists."); ;
 
         role.Model.Description = updated.Description;
         role.ModelPermission = updated.Permission switch
@@ -229,5 +255,10 @@ internal class SsasRoleManager : ISsasRoleManager
         };
 
         db.Model.SaveChanges();
+        _cache.Remove(RolesCacheKey());
     }
+
+    private string RoleExternalMembersCacheKey(string roleName) => $"{nameof(GetRoleExternalMembers)}:{_databaseName}:{roleName}";
+
+    private string RolesCacheKey() => $"{nameof(Roles)}:{_databaseName}";
 }

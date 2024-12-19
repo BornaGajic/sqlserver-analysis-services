@@ -1,8 +1,8 @@
-﻿using Framework.Common;
+﻿using SqlServerAnalysisServices.Common;
 using Microsoft.AnalysisServices.AdomdClient;
 using System.Data.Common;
 using System.Text.RegularExpressions;
-using Framework.Service;
+using SqlServerAnalysisServices.Service;
 using SqlServerAnalysisServices.Model;
 using Azure.Core;
 using System.Runtime.Caching;
@@ -11,12 +11,12 @@ namespace SqlServerAnalysisServices.Service;
 
 internal partial class SsasConnection : ISsasConnectionFactory, ISsasConnectionConfigurator
 {
-    private readonly AzureTokenService _azTokenService;
+    private readonly AzureTokenCredentialService _azTokenService;
 
     // https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/identity/Azure.Identity/samples/TokenCache.md
     private readonly MemoryCache _credentialCache = new MemoryCache(nameof(SsasConnection));
 
-    public SsasConnection(AzureTokenService azTokenService)
+    public SsasConnection(AzureTokenCredentialService azTokenService)
     {
         _azTokenService = azTokenService;
     }
