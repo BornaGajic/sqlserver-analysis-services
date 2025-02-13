@@ -12,8 +12,8 @@
     <PackageReference Include="Azure.ResourceManager.Analysis" Version="1.1.0" />
     <PackageReference Include="Dapper" Version="2.1.35" />
     <PackageReference Include="FastMember" Version="1.5.0" />
-    <PackageReference Include="Microsoft.AnalysisServices.AdomdClient.NetCore.retail.amd64" Version="19.80.0" />
-    <PackageReference Include="Microsoft.AnalysisServices.NetCore.retail.amd64" Version="19.80.0" />
+    <PackageReference Include="Microsoft.AnalysisServices" Version="19.88.3" />
+    <PackageReference Include="Microsoft.AnalysisServices.AdomdClient" Version="19.88.3" />
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Options" Version="9.0.0" />
