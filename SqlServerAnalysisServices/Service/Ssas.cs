@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using SqlServerAnalysisServices.Extensions;
 using Azure.ResourceManager.Analysis;
 using Azure.ResourceManager;
+using Azure.ResourceManager.Analysis.Models;
 
 namespace SqlServerAnalysisServices.Service
 {
@@ -63,9 +64,12 @@ namespace SqlServerAnalysisServices.Service
             }
         }
 
-        public virtual void ChangeEffectiveUser(string effectiveUserName) => _rootConnection.ChangeEffectiveUser(effectiveUserName);
+        public virtual void ChangeEffectiveUser(string effectiveUserName)
+            => _rootConnection.ChangeEffectiveUser(effectiveUserName);
 
-        public ISsasDatabaseStructure DatabaseStructure(string databaseName) => new SsasDatabaseStructure(databaseName, this);
+        /// <inheritdoc/>
+        public ISsasDatabaseStructure DatabaseStructure(string databaseName = null)
+            => new SsasDatabaseStructure(string.IsNullOrEmpty(databaseName) ? _rootConnection.Database : databaseName, this);
 
         public void Dispose()
         {
@@ -166,6 +170,16 @@ namespace SqlServerAnalysisServices.Service
             return result?.HasCompleted ?? false;
         }
 
+        public virtual int Process(Action<SsasProcessScriptBuilder> configurator, CancellationToken cancellation = default)
+        {
+            ArgumentNullException.ThrowIfNull(configurator);
+
+            var scriptBuilder = new SsasProcessScriptBuilder();
+            configurator(scriptBuilder);
+
+            return Process(scriptBuilder.Build(), cancellation);
+        }
+
         // <inheritdoc/>
         public virtual int Process(string script, CancellationToken cancellation = default)
         {
@@ -192,6 +206,21 @@ namespace SqlServerAnalysisServices.Service
                 },
                 cancellationToken
             );
+
+        public async Task<bool> ScaleAsync(string skuTier, CancellationToken cancellationToken = default)
+        {
+            if (IsProcessing(cancellation: cancellationToken))
+            {
+                throw new Exception("A database is currently being processed.");
+            }
+
+            var result = await AzureServerResource.Value?.UpdateAsync(Azure.WaitUntil.Completed, new AnalysisServerPatch
+            {
+                Sku = new AnalysisResourceSku(skuTier)
+            }, cancellationToken);
+
+            return result?.HasCompleted ?? false;
+        }
 
         public async ValueTask<string> SendXmlaRequestAsync(XmlaSoapRequest request, CancellationToken cancellationToken = default)
         {

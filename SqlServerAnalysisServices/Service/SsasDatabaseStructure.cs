@@ -40,7 +40,7 @@ internal class SsasDatabaseStructure : ISsasDatabaseStructure
 
     public SsasDatabase Properties()
     {
-        var connection = Parent.GetConnection();
+        using var connection = Parent.GetConnection();
         connection.Open();
         connection.ChangeDatabase(DatabaseName);
 
@@ -67,7 +67,7 @@ internal class SsasDatabaseStructure : ISsasDatabaseStructure
 
         if (tableDescriptions is null)
         {
-            var connection = Parent.GetConnection();
+            using var connection = Parent.GetConnection();
             connection.Open();
             connection.ChangeDatabase(DatabaseName);
 
