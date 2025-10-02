@@ -1,5 +1,4 @@
 ﻿using SqlServerAnalysisServices.Common;
-using Microsoft.AnalysisServices.AdomdClient;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace SqlServerAnalysisServices.Service;
@@ -12,15 +11,7 @@ public class SsasFactory : ISsasFactory
 
     protected Action<ISsasConnectionConfigurator, IServiceProvider> ConnectionBuilderConfigurator { get; set; }
 
-    public virtual ISsas Create()
-    {
-        var scope = _serviceProvider.CreateAsyncScope();
-
-        var ssas = ActivatorUtilities.CreateInstance<Ssas>(scope.ServiceProvider, InitializeConnection());
-        ssas.Disposed += (sender, args) => scope.Dispose();
-
-        return ssas;
-    }
+    public virtual ISsas Create() => ActivatorUtilities.CreateInstance<Ssas>(_serviceProvider, InitializeConnection());
 
     public virtual ISsasFactory WithConnection(Action<ISsasConnectionConfigurator, IServiceProvider> builder)
     {
@@ -34,7 +25,7 @@ public class SsasFactory : ISsasFactory
         return this;
     }
 
-    protected virtual AdomdConnection InitializeConnection()
+    protected virtual SsasConnection InitializeConnection()
     {
         if (ConnectionBuilderConfigurator is null)
             throw new Exception($"Connection is unconfigured. Call {nameof(WithConnection)}.");
@@ -45,6 +36,6 @@ public class SsasFactory : ISsasFactory
 
         ConnectionBuilderConfigurator(ssasConnection, connectionFactoryScope.ServiceProvider);
 
-        return ssasConnection.Create();
+        return ssasConnection;
     }
 }

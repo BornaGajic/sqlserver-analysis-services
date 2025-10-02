@@ -1,49 +1,28 @@
 ﻿using SqlServerAnalysisServices.Common;
-using Microsoft.AnalysisServices.AdomdClient;
 using System.Data.Common;
 using System.Text.RegularExpressions;
-using SqlServerAnalysisServices.Service;
 using SqlServerAnalysisServices.Model;
 using Azure.Core;
-using System.Runtime.Caching;
 
 namespace SqlServerAnalysisServices.Service;
 
-internal partial class SsasConnection : ISsasConnectionFactory, ISsasConnectionConfigurator
+public partial class SsasConnection : ISsasConnectionConfigurator
 {
     private readonly AzureTokenCredentialService _azTokenService;
-
-    // https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/identity/Azure.Identity/samples/TokenCache.md
-    private readonly MemoryCache _credentialCache = new MemoryCache(nameof(SsasConnection));
 
     public SsasConnection(AzureTokenCredentialService azTokenService)
     {
         _azTokenService = azTokenService;
     }
 
-    private enum AuthenticationType
-    { Azure, Basic };
-
     internal AzureResource AzureResource { get; private set; }
+
+    internal string ConnectionString => ConnectionStringBuilder.ConnectionString;
 
     internal string DataSource => ConnectionStringBuilder.TryGetValue("Data Source", out var dataSource)
         ? dataSource as string : throw new Exception("'Data Source' is a required connection string property.");
 
-    private AuthenticationType AuthType { get; set; } = AuthenticationType.Basic;
     private DbConnectionStringBuilder ConnectionStringBuilder { get; } = [];
-
-    public virtual AdomdConnection Create()
-    {
-        var connection = new AdomdConnection(ConnectionStringBuilder.ConnectionString);
-
-        if (connection.IsCloudAnalysisServices())
-        {
-            connection.AccessToken = GetAzureSsasAccessToken();
-            connection.OnAccessTokenExpired = oldToken => GetAzureSsasAccessToken();
-        }
-
-        return connection;
-    }
 
     /// <inheritdoc/>
     public virtual ISsasConnectionConfigurator UsingConnectionString(string connectionString, AzureResource azureResource)
@@ -73,15 +52,15 @@ internal partial class SsasConnection : ISsasConnectionFactory, ISsasConnectionC
                 {
                     Password = (ConnectionStringBuilder.TryGetValue("PWD", out var password) ? password : ConnectionStringBuilder["Password"]) as string
                 };
+                ConnectionStringBuilder.Remove("PWD");
+                ConnectionStringBuilder.Remove("Password");
             }
 
             AzureResource = azureResource;
-            AuthType = AuthenticationType.Azure;
         }
         else
         {
             AzureResource = null;
-            AuthType = AuthenticationType.Basic;
         }
 
         return this;
@@ -102,12 +81,12 @@ internal partial class SsasConnection : ISsasConnectionFactory, ISsasConnectionC
         if (!regexMatch.Success)
         {
             throw new Exception("""
-            Invalid connection string.
-            -------------------------
-            Valid values for Azure Analysis Services include <protocol>://<region>/<servername> where protocol is string asazure or
-            link when using a server name alias, region is the Uri where the server was created (for example, westus.asazure.windows.net),
-            and servername is the name of your unique server within the region.
-            """);
+                Invalid connection string.
+                -------------------------
+                Valid values for Azure Analysis Services include <protocol>://<region>/<servername> where protocol is string asazure or
+                link when using a server name alias, region is the Uri where the server was created (for example, westus.asazure.windows.net),
+                and servername is the name of your unique server within the region.
+                """);
         }
 
         var region = regexMatch.Groups["Region"].Value;

@@ -1,7 +1,7 @@
 ﻿namespace SqlServerAnalysisServices.Attribute;
 
 [AttributeUsage(AttributeTargets.Property)]
-public class SkipSsasQueryParameter : System.Attribute
+public class SkipDaxQueryParameterAttribute : System.Attribute
 {
     [Flags]
     public enum SkipCondition

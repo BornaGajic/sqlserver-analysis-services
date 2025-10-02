@@ -3,6 +3,7 @@
 public record SsasServer
 {
     public string Name { get; init; }
+    public string FullName { get; init; }
     public string Tier { get; init; }
     public string Location { get; init; }
     public string State { get; init; }

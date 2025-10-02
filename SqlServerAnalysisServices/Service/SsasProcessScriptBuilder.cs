@@ -7,13 +7,13 @@ namespace SqlServerAnalysisServices.Service
     public record SsasProcessObject
     {
         [JsonPropertyName("database")]
-        internal string DatabaseName { get; set; }
+        public string DatabaseName { get; private set; }
 
         [JsonPropertyName("partition")]
-        internal string PartitionName { get; set; }
+        public string PartitionName { get; private set; }
 
         [JsonPropertyName("table")]
-        internal string TableName { get; set; }
+        public string TableName { get; private set; }
 
         public SsasProcessObject Database(string databaseName)
         {
@@ -37,6 +37,7 @@ namespace SqlServerAnalysisServices.Service
     public record SsasProcessScriptBuilder
     {
         private List<SsasProcessObject> Objects { get; init; } = [];
+        public IEnumerable<SsasProcessObject> ProcessingObjects => Objects;
 
         public SsasProcessScriptBuilder CreateObject(Action<SsasProcessObject> configuratorCallback)
         {
@@ -50,9 +51,16 @@ namespace SqlServerAnalysisServices.Service
         {
             "refresh": {
                 "type": "full",
-                "objects": {{JsonSerializer.Serialize(Objects, CustomJsonSerializerOptions.Default)}}
+                "objects": {{JsonSerializer.Serialize(Objects, CustomJsonSerializerOptions.DefaultWithIgnoreNull)}}
             }
         }
         """;
+
+        public static SsasProcessScriptBuilder CreateFullRefreshScript(string databaseName)
+        {
+            var fullRefreshScript = new SsasProcessScriptBuilder();
+            fullRefreshScript.CreateObject(obj => obj.Database(databaseName));
+            return fullRefreshScript;
+        }
     }
 }

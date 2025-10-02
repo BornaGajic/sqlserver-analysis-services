@@ -3,6 +3,7 @@ using SqlServerAnalysisServices.Attribute;
 using SqlServerAnalysisServices.Model;
 using Microsoft.AnalysisServices.AdomdClient;
 using System.Data;
+using System.Reflection;
 
 namespace SqlServerAnalysisServices.Extensions;
 
@@ -24,6 +25,11 @@ internal static class AdomdConnectionExstensions
         var cmd = connection.CreateCommand();
         cmd.CommandText = query.Query;
 
+        if (query.Settings?.Timeout is not null)
+        {
+            cmd.CommandTimeout = query.Settings.Timeout.Value;
+        }
+
         if (query.Param is not null)
         {
             var paramType = query.Param.GetType();
@@ -35,14 +41,16 @@ internal static class AdomdConnectionExstensions
                 TypeAccessorCache.Add(paramType, typeAccessor);
             }
 
+            var skipDaxQueryParamOnClass = paramType.GetCustomAttribute<SkipDaxQueryParameterAttribute>();
+
             foreach (var member in typeAccessor.GetMembers())
             {
                 var excludeParam =
-                    member.GetAttribute(typeof(SkipSsasQueryParameter), false) is SkipSsasQueryParameter skipQueryAttribute
+                    (skipDaxQueryParamOnClass ?? member.GetAttribute(typeof(SkipDaxQueryParameterAttribute), false)) is SkipDaxQueryParameterAttribute skipQueryAttribute
                     && (
-                        skipQueryAttribute.Condition.HasFlag(SkipSsasQueryParameter.SkipCondition.Skip)
+                        skipQueryAttribute.Condition.HasFlag(SkipDaxQueryParameterAttribute.SkipCondition.Skip)
                         || (
-                            skipQueryAttribute.Condition.HasFlag(SkipSsasQueryParameter.SkipCondition.SkipIfNull)
+                            skipQueryAttribute.Condition.HasFlag(SkipDaxQueryParameterAttribute.SkipCondition.SkipIfNull)
                             && typeAccessor[query.Param, member.Name] is null
                         )
                     );
@@ -67,14 +75,14 @@ internal static class AdomdConnectionExstensions
         }
 
         using var cmd = connection.CreateCommand(query);
+        cmd.Prepare();
 
         cancellationToken.ThrowIfCancellationRequested();
         using var cancellationRegistration = cancellationToken.Register(cmd.Cancel);
 
         var resultType = typeof(TResult);
-        var cacheHit = TypeAccessorCache.TryGetValue(resultType, out var resultTypeAccessor);
 
-        if (!cacheHit)
+        if (!TypeAccessorCache.TryGetValue(resultType, out var resultTypeAccessor))
         {
             resultTypeAccessor = TypeAccessor.Create(resultType);
             TypeAccessorCache.Add(resultType, resultTypeAccessor);
@@ -86,14 +94,21 @@ internal static class AdomdConnectionExstensions
         {
             var resultItem = resultTypeAccessor.CreateNew();
 
-            foreach (var resulTypeMember in resultTypeAccessor.GetMembers())
+            foreach (var resulTypeMember in resultTypeAccessor.GetMembers().Where(m => m.GetAttribute(typeof(DaxNotMappedAttribute), false) is null))
             {
-                resultTypeAccessor[resultItem, resulTypeMember.Name] = ChangeType(row[$"[{resulTypeMember.Name}]"], resulTypeMember.Type);
+                var memberName = resulTypeMember.GetAttribute(typeof(DaxColumnNameAttribute), false) is DaxColumnNameAttribute columnNameAttribute
+                    ? columnNameAttribute.Name
+                    : resulTypeMember.Name;
+
+                resultTypeAccessor[resultItem, resulTypeMember.Name] = ChangeType(row[$"[{memberName}]"], resulTypeMember.Type);
             }
 
             yield return (TResult)resultItem;
         }
     }
+
+    internal static TResult ExecuteScalar<TResult>(this AdomdConnection connection, DaxQuery query, CancellationToken cancellationToken = default)
+        => connection.ExecuteQuery<TResult>(query, cancellationToken).SingleOrDefault();
 
     private static object ChangeType(object value, Type conversion)
     {

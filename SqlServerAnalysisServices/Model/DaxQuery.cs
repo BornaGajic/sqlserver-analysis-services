@@ -16,5 +16,6 @@ namespace SqlServerAnalysisServices.Model
     {
         public string EffectiveUserName { get; init; }
         public string Database { get; init; }
+        public int? Timeout { get; init; }
     }
 }
