@@ -3,10 +3,13 @@ using SqlServerAnalysisServices.Service;
 
 namespace SqlServerAnalysisServices.Common;
 
-public interface ISsas : IDisposable
+public interface ISsas
 {
     void CancelProcessing(string databaseName, CancellationToken cancellation = default);
 
+    /// <summary>
+    /// Returns database properties of the inital database or <paramref name="databaseName"/>.
+    /// </summary>
     ISsasDatabaseStructure DatabaseStructure(string databaseName = null);
 
     IEnumerable<SsasDatabase> GetDatabases(CancellationToken cancellationToken = default);
@@ -15,6 +18,9 @@ public interface ISsas : IDisposable
 
     IEnumerable<SsasLock> GetSsasLocks(string databaseName = null, CancellationToken cancellation = default);
 
+    /// <summary>
+    /// Checks whether a specific database is being processed or if any are processing
+    /// </summary>
     bool IsProcessing(string databaseName, CancellationToken cancellation = default);
 
     ISsasRoleManager ManageDatabaseRoles(string databaseName);
@@ -30,6 +36,10 @@ public interface ISsas : IDisposable
     IEnumerable<T> Query<T>(string query, object param = null, CancellationToken cancellationToken = default);
 
     IEnumerable<T> Query<T>(DaxQuery query, CancellationToken cancellationToken = default);
+
+    T Scalar<T>(DaxQuery query, CancellationToken cancellationToken = default);
+
+    Task<bool> ScaleAsync(string skuTier, CancellationToken cancellationToken = default);
 
     ValueTask<string> SendXmlaRequestAsync(XmlaSoapRequest request, CancellationToken cancellationToken = default);
 

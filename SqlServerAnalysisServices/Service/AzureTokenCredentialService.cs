@@ -17,7 +17,7 @@ public class AzureTokenCredentialService
         {
             GetClientSecretCredential(azureResource.TenantId, azureResource.ClientId, azureResource.ClientSecret),
             GetManagedIdentityCredential(azureResource.ManagedIdentityClientId),
-            GetUsernamePasswordCredentials(azureResource.Username, azureResource.Password, azureResource.TenantId, azureResource.ClientId)
+            //GetUsernamePasswordCredentials(azureResource.Username, azureResource.Password, azureResource.TenantId, azureResource.ClientId)
         };
 
         if (credentialList.Count == 0)
@@ -71,6 +71,11 @@ public class AzureTokenCredentialService
         return null;
     }
 
+    // This shouldn't be used. Even if you have all the information (uid, pwd, tid, cid), it requires a client secret - but
+    // there isn't a ctor param that accepts a client secret; which means that the only way for this to work is to make
+    // Azure Application PUBLIC (by setting the "Allow public client flows" to Enabled) that way Client Secret becomes unnecessary.
+    // This allows anyone with a username, password, tenant id and client id client id to authenticate.
+    [Obsolete]
     private UsernamePasswordCredential GetUsernamePasswordCredentials(string username, string password, string tenantId, string clientId)
     {
         var usernamePasswordCacheKey = $"{username}:{password}:{tenantId}:{clientId}";

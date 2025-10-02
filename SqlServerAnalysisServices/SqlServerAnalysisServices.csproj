@@ -7,13 +7,13 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Azure.Core" Version="1.44.1" />
-    <PackageReference Include="Azure.Identity" Version="1.13.1" />
-    <PackageReference Include="Azure.ResourceManager.Analysis" Version="1.1.0" />
-    <PackageReference Include="Dapper" Version="2.1.35" />
+    <PackageReference Include="Azure.Core" Version="1.49.0" />
+    <PackageReference Include="Azure.Identity" Version="1.16.0" />
+    <PackageReference Include="Azure.ResourceManager.Analysis" Version="1.1.1" />
+    <PackageReference Include="Dapper" Version="2.1.66" />
     <PackageReference Include="FastMember" Version="1.5.0" />
-    <PackageReference Include="Microsoft.AnalysisServices" Version="19.88.3" />
-    <PackageReference Include="Microsoft.AnalysisServices.AdomdClient" Version="19.88.3" />
+    <PackageReference Include="Microsoft.AnalysisServices" Version="19.104.1" />
+    <PackageReference Include="Microsoft.AnalysisServices.AdomdClient" Version="19.104.1" />
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Options" Version="9.0.0" />
