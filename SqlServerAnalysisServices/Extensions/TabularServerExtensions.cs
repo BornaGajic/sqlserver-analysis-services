@@ -5,6 +5,7 @@ using System.Net.Http.Headers;
 using System.Runtime.Caching;
 using System.Text;
 using System.Text.Json.Serialization;
+using System.Net.Http.Json;
 
 namespace SqlServerAnalysisServices.Extensions;
 
@@ -12,7 +13,7 @@ internal static class TabularServerExtensions
 {
     private static readonly MemoryCache Cache = new MemoryCache(nameof(TabularServerExtensions));
 
-    private record AzureSsasResolver
+    private record CloudXmlaResolver
     {
         public string CoreServerName { get; init; }
         public string ServerAddress { get; init; }
@@ -20,7 +21,7 @@ internal static class TabularServerExtensions
         public string TenantId { get; init; }
     }
 
-    private record AzureSsasResolverResponse
+    private record CloudXmlaResolverResponse
     {
         [JsonPropertyName("clusterFQDN")]
         public string ClusterFQDN { get; init; }
@@ -32,18 +33,18 @@ internal static class TabularServerExtensions
         public string TenantId { get; init; }
     }
 
-    public static async Task<string> SendAzureXmlaRequestAsync(this Server server, XmlaSoapRequest request, CancellationToken cancellationToken = default)
+    public static async Task<string> SendCloudXmlaRequestAsync(this Server server, XmlaSoapRequest request, CancellationToken cancellationToken = default)
     {
         var dataSource = new DbConnectionStringBuilder { ConnectionString = server.ConnectionString }["Data Source"] as string;
 
-        var azureResolver = await ResolveAzureServer(dataSource, cancellationToken);
+        var cloudResolver = await ResolveCloudXmlaServer(dataSource, cancellationToken);
 
         using var httpClient = new HttpClient();
         httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", server.AccessToken.Token);
-        httpClient.DefaultRequestHeaders.TryAddWithoutValidation("x-ms-xmlaserver", azureResolver.CoreServerName);
+        httpClient.DefaultRequestHeaders.TryAddWithoutValidation("x-ms-xmlaserver", cloudResolver.CoreServerName);
         httpClient.DefaultRequestHeaders.TryAddWithoutValidation("x-ms-xmlacaps-negotiation-flags", "0,0,0,0,1");
 
-        var newDataSource = new UriBuilder(azureResolver.ServerAddress)
+        var newDataSource = new UriBuilder(cloudResolver.ServerAddress)
         {
             Path = "/webapi/xmla"
         };
@@ -62,7 +63,7 @@ internal static class TabularServerExtensions
         return await xmlaResponse.Content.ReadAsStringAsync(cancellationToken);
     }
 
-    public static string SendLocalhostXmlaRequest(this Server server, XmlaSoapRequest request, CancellationToken cancellationToken = default)
+    public static string SendXmlaRequestViaSdk(this Server server, XmlaSoapRequest request, CancellationToken cancellationToken = default)
     {
         // Server needs to be locked because the connection cannot be used while an XmlReader object is open.
         lock (server)
@@ -79,10 +80,10 @@ internal static class TabularServerExtensions
         }
     }
 
-    private static async ValueTask<AzureSsasResolver> ResolveAzureServer(string dataSource, CancellationToken cancellationToken = default)
+    private static async ValueTask<CloudXmlaResolver> ResolveCloudXmlaServer(string dataSource, CancellationToken cancellationToken = default)
     {
-        var cacheKey = $"{nameof(ResolveAzureServer)}-{dataSource}";
-        var cacheHit = Cache.Get(cacheKey) as AzureSsasResolver;
+        var cacheKey = $"{nameof(ResolveCloudXmlaServer)}-{dataSource}";
+        var cacheHit = Cache.Get(cacheKey) as CloudXmlaResolver;
 
         if (cacheHit is not null)
         {
@@ -90,14 +91,14 @@ internal static class TabularServerExtensions
         }
 
         var resolverURI = new UriBuilder(dataSource);
-        var azureResourceName = new UriBuilder("https", resolverURI.Host).ToString().TrimEnd('/');
-        var azureServerName = resolverURI.Path.Trim('/');
+        var cloudResourceName = new UriBuilder("https", resolverURI.Host).ToString().TrimEnd('/');
+        var cloudServerName = resolverURI.Path.Trim('/');
         resolverURI.Scheme = "https";
         resolverURI.Path = "/webapi/clusterResolve";
 
         var request = new HttpRequestMessage(HttpMethod.Post, resolverURI.ToString())
         {
-            Content = new StringContent(System.Text.Json.JsonSerializer.Serialize(new { serverName = azureServerName }), Encoding.UTF8, "application/json")
+            Content = JsonContent.Create(new { serverName = cloudServerName })
         };
 
         using var httpClient = new HttpClient();
@@ -105,21 +106,21 @@ internal static class TabularServerExtensions
 
         response.EnsureSuccessStatusCode();
 
-        var responseObj = System.Text.Json.JsonSerializer.Deserialize<AzureSsasResolverResponse>(await response.Content.ReadAsStringAsync(cancellationToken));
+        var responseObj = System.Text.Json.JsonSerializer.Deserialize<CloudXmlaResolverResponse>(await response.Content.ReadAsStringAsync(cancellationToken));
 
-        var azureResolver = new AzureSsasResolver
+        var cloudResolver = new CloudXmlaResolver
         {
             ServerAddress = new UriBuilder("https", responseObj.ClusterFQDN).ToString().TrimEnd('/'),
             CoreServerName = responseObj.CoreServerName,
-            ServerResource = azureResourceName,
+            ServerResource = cloudResourceName,
             TenantId = responseObj.TenantId
         };
 
-        Cache.Set(cacheKey, azureResolver, new CacheItemPolicy
+        Cache.Set(cacheKey, cloudResolver, new CacheItemPolicy
         {
             SlidingExpiration = TimeSpan.FromMinutes(30)
         });
 
-        return azureResolver;
+        return cloudResolver;
     }
 }

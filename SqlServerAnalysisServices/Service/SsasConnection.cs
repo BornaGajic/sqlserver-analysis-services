@@ -3,6 +3,7 @@ using System.Data.Common;
 using System.Text.RegularExpressions;
 using SqlServerAnalysisServices.Model;
 using Azure.Core;
+using SqlServerAnalysisServices.Extensions;
 
 namespace SqlServerAnalysisServices.Service;
 
@@ -31,7 +32,7 @@ public partial class SsasConnection : ISsasConnectionConfigurator
 
         ConnectionStringBuilder.ConnectionString = connectionString;
 
-        if (DataSource.StartsWith("asazure://"))
+        if (IsCloudAnalysisServices())
         {
             if (azureResource == new AzureResource())
             {
@@ -76,32 +77,53 @@ public partial class SsasConnection : ISsasConnectionConfigurator
             throw new Exception("Data Source property is unconfigured.");
         }
 
-        var regexMatch = RegionFromDataSourceRegex().Match(ConnectionStringBuilder["Data Source"].ToString());
+        AccessToken token;
 
-        if (!regexMatch.Success)
+        if (IsFabricPowerBIEndpoint())
         {
-            throw new Exception("""
+            token = GetAzureSsasTokenCredential().GetPowerBiToken(cancellation);
+        }
+        else
+        {
+            var regexMatch = RegionFromDataSourceRegex().Match(ConnectionStringBuilder["Data Source"].ToString());
+
+            if (!regexMatch.Success)
+            {
+                throw new Exception("""
                 Invalid connection string.
                 -------------------------
                 Valid values for Azure Analysis Services include <protocol>://<region>/<servername> where protocol is string asazure or
                 link when using a server name alias, region is the Uri where the server was created (for example, westus.asazure.windows.net),
                 and servername is the name of your unique server within the region.
                 """);
+            }
+
+            var region = regexMatch.Groups["Region"].Value;
+            token = GetAzureSsasTokenCredential().GetAnalysisServicesToken(region, cancellation);
         }
 
-        var region = regexMatch.Groups["Region"].Value;
-        var resource = $"https://{region}.asazure.windows.net";
-        var scope = $"{resource}/.default";
-
-        var authenticationResult = GetAzureSsasTokenCredential().GetToken(new TokenRequestContext([scope]), cancellation);
-
-        return new Microsoft.AnalysisServices.AccessToken(authenticationResult.Token, authenticationResult.ExpiresOn, this);
+        return new Microsoft.AnalysisServices.AccessToken(token.Token, token.ExpiresOn, this);
     }
 
     /// <summary>
     /// Returns <see cref="TokenCredential"/> used to retreive a new SSAS Azure access token. Configured for this specific <see cref="Ssas"/> instance.
     /// </summary>
     internal virtual TokenCredential GetAzureSsasTokenCredential() => _azTokenService.GetAzureTokenCredential(AzureResource);
+
+    internal bool IsAzureAnalysisServices()
+    {
+        return DataSource?.StartsWith("asazure://", StringComparison.OrdinalIgnoreCase) == true;
+    }
+
+    internal bool IsCloudAnalysisServices()
+    {
+        return IsAzureAnalysisServices() || IsFabricPowerBIEndpoint();
+    }
+
+    internal bool IsFabricPowerBIEndpoint()
+    {
+        return DataSource?.StartsWith("powerbi://", StringComparison.OrdinalIgnoreCase) == true;
+    }
 
     [GeneratedRegex(@"asazure:\/\/(?'Region'.*?)\.", RegexOptions.Compiled)]
     protected static partial Regex RegionFromDataSourceRegex();

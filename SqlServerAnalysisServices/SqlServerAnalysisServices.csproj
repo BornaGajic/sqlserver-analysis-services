@@ -10,6 +10,7 @@
     <PackageReference Include="Azure.Core" Version="1.49.0" />
     <PackageReference Include="Azure.Identity" Version="1.16.0" />
     <PackageReference Include="Azure.ResourceManager.Analysis" Version="1.1.1" />
+    <PackageReference Include="Azure.ResourceManager.Fabric" Version="1.0.0" />
     <PackageReference Include="Dapper" Version="2.1.66" />
     <PackageReference Include="FastMember" Version="1.5.0" />
     <PackageReference Include="Microsoft.AnalysisServices" Version="19.104.1" />
@@ -19,6 +20,8 @@
     <PackageReference Include="Microsoft.Extensions.Options" Version="9.0.0" />
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="9.0.0" />
     <PackageReference Include="Microsoft.Extensions.Options.DataAnnotations" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Fabric.Api" Version="1.0.0" />
+    <PackageReference Include="Nito.AsyncEx" Version="5.1.2" />
     <PackageReference Include="System.Runtime.Caching" Version="8.0.0" />
   </ItemGroup>
 

@@ -5,6 +5,8 @@ VisualStudioVersion = 17.10.34707.107
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SqlServerAnalysisServices", "SqlServerAnalysisServices\SqlServerAnalysisServices.csproj", "{22D3F645-C348-4217-B734-4C22E7A911EF}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SqlServerAnalysisServices.Test", "SqlServerAnalysisServices.Test\SqlServerAnalysisServices.Test.csproj", "{10819323-531E-4C2C-B4B2-AF950B693D72}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +17,10 @@ Global
 		{22D3F645-C348-4217-B734-4C22E7A911EF}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{22D3F645-C348-4217-B734-4C22E7A911EF}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{22D3F645-C348-4217-B734-4C22E7A911EF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{10819323-531E-4C2C-B4B2-AF950B693D72}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{10819323-531E-4C2C-B4B2-AF950B693D72}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{10819323-531E-4C2C-B4B2-AF950B693D72}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{10819323-531E-4C2C-B4B2-AF950B693D72}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

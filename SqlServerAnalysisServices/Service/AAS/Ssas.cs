@@ -88,7 +88,7 @@ public class Ssas : ISsas
         }
     }
 
-    public async ValueTask<SsasServer> GetServerDetailsAsync(CancellationToken cancellation = default)
+    public virtual async ValueTask<SsasServer> GetServerDetailsAsync(CancellationToken cancellation = default)
     {
         using var connection = GetConnection();
 
@@ -149,7 +149,7 @@ public class Ssas : ISsas
 
     public ISsasRoleManager ManageDatabaseRoles(string databaseName) => new SsasRoleManager(databaseName, this);
 
-    public bool PauseServer(CancellationToken cancellationToken = default)
+    public virtual bool PauseServer(CancellationToken cancellationToken = default)
     {
         if (IsProcessing(cancellation: cancellationToken))
         {
@@ -160,7 +160,7 @@ public class Ssas : ISsas
         return result?.HasCompleted ?? false;
     }
 
-    public async Task<bool> PauseServerAsync(CancellationToken cancellationToken = default)
+    public virtual async Task<bool> PauseServerAsync(CancellationToken cancellationToken = default)
     {
         if (IsProcessing(cancellation: cancellationToken))
         {
@@ -233,7 +233,6 @@ public class Ssas : ISsas
 
     public async ValueTask<string> SendXmlaRequestAsync(XmlaSoapRequest request, CancellationToken cancellationToken = default)
     {
-        using var connection = GetConnection();
         using var server = GetServer();
 
         if (!string.IsNullOrWhiteSpace(request.Settings?.EffectiveUserName))
@@ -244,21 +243,21 @@ public class Ssas : ISsas
             };
         }
 
-        if (connection.IsCloudAnalysisServices())
+        if (_ssasConnection.IsAzureAnalysisServices())
         {
-            return await server.SendAzureXmlaRequestAsync(request, cancellationToken);
+            return await server.SendCloudXmlaRequestAsync(request, cancellationToken);
         }
 
-        return server.SendLocalhostXmlaRequest(request, cancellationToken);
+        return server.SendXmlaRequestViaSdk(request, cancellationToken);
     }
 
-    public bool StartServer(CancellationToken cancellationToken = default)
+    public virtual bool StartServer(CancellationToken cancellationToken = default)
     {
         var result = AzureServerResource.Value?.Resume(Azure.WaitUntil.Completed, cancellationToken);
         return result?.HasCompleted ?? false;
     }
 
-    public async Task<bool> StartServerAsync(CancellationToken cancellationToken = default)
+    public virtual async Task<bool> StartServerAsync(CancellationToken cancellationToken = default)
     {
         if (AzureServerResource.Value is not null)
         {
@@ -269,7 +268,7 @@ public class Ssas : ISsas
         return false;
     }
 
-    internal AdomdConnection GetConnection()
+    protected internal virtual AdomdConnection GetConnection()
     {
         var connection = new AdomdConnection(_ssasConnection.ConnectionString);
 
@@ -285,7 +284,7 @@ public class Ssas : ISsas
     /// <summary>
     /// <paramref name="propertiesOnly"/> if set to true the server will only load server properties.
     /// </summary>
-    internal TOM.Server GetServer(bool propertiesOnly = false)
+    protected internal virtual TOM.Server GetServer(bool propertiesOnly = false)
     {
         using var connection = GetConnection();
         var server = new TOM.Server();

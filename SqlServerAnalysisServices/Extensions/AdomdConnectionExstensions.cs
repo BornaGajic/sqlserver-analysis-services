@@ -90,17 +90,27 @@ internal static class AdomdConnectionExstensions
 
         using var adomdDataReader = cmd.ExecuteReader();
 
+        var fieldDict = Enumerable.Range(0, adomdDataReader.FieldCount).ToDictionary(
+            idx => adomdDataReader.GetName(idx).Trim('[', ']'),
+            StringComparer.OrdinalIgnoreCase
+        );
+
+        var resultTypeMembers = (
+            from member in resultTypeAccessor.GetMembers()
+            where member.GetAttribute(typeof(DaxNotMappedAttribute), false) is null
+            let nameAttribute = member.GetAttribute(typeof(DaxColumnNameAttribute), false) as DaxColumnNameAttribute
+            let ordinal = fieldDict.GetValueOrDefault(nameAttribute is not null ? nameAttribute.Name : member.Name, -1)
+            where ordinal != -1
+            select (member, ordinal)
+        ).ToList();
+
         foreach (var row in adomdDataReader)
         {
             var resultItem = resultTypeAccessor.CreateNew();
 
-            foreach (var resulTypeMember in resultTypeAccessor.GetMembers().Where(m => m.GetAttribute(typeof(DaxNotMappedAttribute), false) is null))
+            foreach (var (member, ordinal) in resultTypeMembers)
             {
-                var memberName = resulTypeMember.GetAttribute(typeof(DaxColumnNameAttribute), false) is DaxColumnNameAttribute columnNameAttribute
-                    ? columnNameAttribute.Name
-                    : resulTypeMember.Name;
-
-                resultTypeAccessor[resultItem, resulTypeMember.Name] = ChangeType(row[$"[{memberName}]"], resulTypeMember.Type);
+                resultTypeAccessor[resultItem, member.Name] = ChangeType(row[ordinal], member.Type);
             }
 
             yield return (TResult)resultItem;
@@ -110,20 +120,46 @@ internal static class AdomdConnectionExstensions
     internal static TResult ExecuteScalar<TResult>(this AdomdConnection connection, DaxQuery query, CancellationToken cancellationToken = default)
         => connection.ExecuteQuery<TResult>(query, cancellationToken).SingleOrDefault();
 
-    private static object ChangeType(object value, Type conversion)
+    private static object ChangeType(object value, Type targetType)
     {
-        var t = conversion;
-
-        if (t.IsGenericType && t.GetGenericTypeDefinition().Equals(typeof(Nullable<>)))
+        if (value == null || value == DBNull.Value)
         {
-            if (value == null)
-            {
-                return null;
-            }
-
-            t = Nullable.GetUnderlyingType(t);
+            return targetType.IsValueType ? Activator.CreateInstance(targetType) : null;
         }
 
-        return Convert.ChangeType(value, t);
+        if (targetType.IsAssignableFrom(value.GetType()))
+        {
+            return value;
+        }
+
+        var underlyingType = Nullable.GetUnderlyingType(targetType);
+        var actualType = underlyingType ?? targetType;
+
+        if (actualType.IsEnum)
+        {
+            if (value is string strValue)
+            {
+                return Enum.Parse(actualType, strValue, ignoreCase: true);
+            }
+
+            return Enum.ToObject(actualType, value);
+        }
+
+        if (actualType == typeof(Guid) && value is string guidString)
+        {
+            return Guid.Parse(guidString);
+        }
+
+        if (actualType == typeof(DateOnly))
+        {
+            return value switch
+            {
+                DateTime dt => DateOnly.FromDateTime(dt),
+                string str => DateOnly.Parse(str),
+                _ => throw new NotSupportedException($"Failed to convert value of type {value.GetType()} to DateOnly.")
+            };
+        }
+
+        return Convert.ChangeType(value, actualType);
     }
 }

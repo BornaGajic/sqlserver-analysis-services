@@ -1,9 +1,9 @@
-﻿using SqlServerAnalysisServices.Common;
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
+using SqlServerAnalysisServices.Common;
 
 namespace SqlServerAnalysisServices.Service;
 
-public class SsasFactory : ISsasFactory
+public abstract class SsasFactory : ISsasFactory
 {
     private readonly IServiceProvider _serviceProvider;
 
@@ -11,7 +11,7 @@ public class SsasFactory : ISsasFactory
 
     protected Action<ISsasConnectionConfigurator, IServiceProvider> ConnectionBuilderConfigurator { get; set; }
 
-    public virtual ISsas Create() => ActivatorUtilities.CreateInstance<Ssas>(_serviceProvider, InitializeConnection());
+    public abstract ISsas Create();
 
     public virtual ISsasFactory WithConnection(Action<ISsasConnectionConfigurator, IServiceProvider> builder)
     {
