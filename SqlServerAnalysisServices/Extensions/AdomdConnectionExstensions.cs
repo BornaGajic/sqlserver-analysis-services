@@ -2,6 +2,7 @@
 using SqlServerAnalysisServices.Attribute;
 using SqlServerAnalysisServices.Model;
 using Microsoft.AnalysisServices.AdomdClient;
+using System.Collections.Concurrent;
 using System.Data;
 using System.Reflection;
 
@@ -9,7 +10,7 @@ namespace SqlServerAnalysisServices.Extensions;
 
 internal static class AdomdConnectionExstensions
 {
-    private static readonly Dictionary<Type, TypeAccessor> TypeAccessorCache = [];
+    private static readonly ConcurrentDictionary<Type, TypeAccessor> TypeAccessorCache = new();
 
     /// <summary>
     /// Builds an Adomd Command using information found in the query. Applies <paramref name="query"/> params if any.
@@ -33,13 +34,7 @@ internal static class AdomdConnectionExstensions
         if (query.Param is not null)
         {
             var paramType = query.Param.GetType();
-            var cacheHit = TypeAccessorCache.TryGetValue(paramType, out var typeAccessor);
-
-            if (!cacheHit)
-            {
-                typeAccessor = TypeAccessor.Create(paramType);
-                TypeAccessorCache.Add(paramType, typeAccessor);
-            }
+            var typeAccessor = TypeAccessorCache.GetOrAdd(paramType, static type => TypeAccessor.Create(type));
 
             var skipDaxQueryParamOnClass = paramType.GetCustomAttribute<SkipDaxQueryParameterAttribute>();
 
@@ -82,11 +77,7 @@ internal static class AdomdConnectionExstensions
 
         var resultType = typeof(TResult);
 
-        if (!TypeAccessorCache.TryGetValue(resultType, out var resultTypeAccessor))
-        {
-            resultTypeAccessor = TypeAccessor.Create(resultType);
-            TypeAccessorCache.Add(resultType, resultTypeAccessor);
-        }
+        var resultTypeAccessor = TypeAccessorCache.GetOrAdd(resultType, static type => TypeAccessor.Create(type));
 
         using var adomdDataReader = cmd.ExecuteReader();
 

@@ -40,7 +40,7 @@ internal class SsasRoleManager : ISsasRoleManager
                         TOM.ModelPermission.ReadRefresh => SsasRolePermission.ReadRefresh,
                         _ => SsasRolePermission.Read
                     }
-                });
+                }).ToList();
 
                 _cache.Set(cacheKey, roles, DateTime.Now.AddMinutes(CacheDurationMinutes));
             }
