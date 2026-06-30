@@ -216,7 +216,7 @@ public class Ssas : ISsas
         return connection.ExecuteScalar<T>(query, cancellationToken);
     }
 
-    public async Task<bool> ScaleAsync(string skuTier, CancellationToken cancellationToken = default)
+    public virtual async Task<bool> ScaleAsync(string skuTier, CancellationToken cancellationToken = default)
     {
         if (IsProcessing(cancellation: cancellationToken))
         {

@@ -80,6 +80,26 @@ public class FabricSsas : Ssas
         return await _fabricManager.SuspendAsync(cancellationToken: cancellationToken);
     }
 
+    public override async Task<bool> ScaleAsync(string skuTier, CancellationToken cancellationToken = default)
+    {
+        if (!IsFabricPowerBIEndpoint())
+        {
+            return await base.ScaleAsync(skuTier, cancellationToken);
+        }
+
+        if (!_fabricManager.IsConfigured)
+        {
+            return false;
+        }
+
+        if (await _fabricManager.IsActiveAsync() && IsProcessing(cancellation: cancellationToken))
+        {
+            throw new Exception("A database is currently being processed.");
+        }
+
+        return await _fabricManager.ScaleAsync(skuTier, cancellationToken: cancellationToken);
+    }
+
     public override bool StartServer(CancellationToken cancellationToken = default)
     {
         if (!IsFabricPowerBIEndpoint())

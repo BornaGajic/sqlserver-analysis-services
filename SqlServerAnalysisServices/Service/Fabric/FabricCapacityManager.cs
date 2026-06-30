@@ -86,7 +86,7 @@ public class FabricCapacityManager
         EnsureConfigured();
 
         return StartOperation(
-            FabricResourceState.Active,
+            ct => IsCapacityInState(FabricResourceState.Active, ct),
             FabricResource.Value.Resume,
             onStartHandler,
             cancellationToken
@@ -100,21 +100,72 @@ public class FabricCapacityManager
         EnsureConfigured();
 
         return await StartOperationAsync(
-            FabricResourceState.Active,
+            ct => IsCapacityInStateAsync(FabricResourceState.Active, ct),
             FabricResource.Value.ResumeAsync,
             onStartHandler,
             cancellationToken
         );
     }
 
-    public virtual async Task<bool> SuspendAsync(
+    public virtual bool Scale(
+        string tier,
+        Action onStartHandler = null,
+        CancellationToken cancellationToken = default
+    )
+    {
+        EnsureConfigured();
+
+        if (string.IsNullOrWhiteSpace(tier))
+        {
+            throw new ArgumentException("A target tier (SKU) must be provided to scale the capacity.", nameof(tier));
+        }
+
+        var patch = new FabricCapacityPatch
+        {
+            Sku = new FabricSku(tier, FabricSkuTier.Fabric)
+        };
+
+        return StartOperation(
+            ct => IsCapacityAtTier(tier, ct),
+            (waitUntil, ct) => FabricResource.Value.Update(waitUntil, patch, ct),
+            onStartHandler,
+            cancellationToken
+        );
+    }
+
+    public virtual async Task<bool> ScaleAsync(
+        string tier,
         Func<Task> onStartHandler = null,
         CancellationToken cancellationToken = default)
     {
         EnsureConfigured();
 
+        if (string.IsNullOrWhiteSpace(tier))
+        {
+            throw new ArgumentException("A target tier (SKU) must be provided to scale the capacity.", nameof(tier));
+        }
+
+        var patch = new FabricCapacityPatch
+        {
+            Sku = new FabricSku(tier, FabricSkuTier.Fabric)
+        };
+
         return await StartOperationAsync(
-            FabricResourceState.Suspended,
+            ct => IsCapacityAtTierAsync(tier, ct),
+            (waitUntil, ct) => FabricResource.Value.UpdateAsync(waitUntil, patch, ct),
+            onStartHandler,
+            cancellationToken
+        );
+    }
+
+    public virtual async Task<bool> SuspendAsync(
+                Func<Task> onStartHandler = null,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureConfigured();
+
+        return await StartOperationAsync(
+            ct => IsCapacityInStateAsync(FabricResourceState.Suspended, ct),
             FabricResource.Value.SuspendAsync,
             onStartHandler,
             cancellationToken
@@ -151,6 +202,18 @@ public class FabricCapacityManager
         }
     }
 
+    private bool IsCapacityAtTier(string tier, CancellationToken cancellationToken = default)
+    {
+        var serverData = GetCapacityData(cancellationToken);
+        return string.Equals(serverData.Sku?.Name, tier, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async ValueTask<bool> IsCapacityAtTierAsync(string tier, CancellationToken cancellationToken = default)
+    {
+        var serverData = await GetCapacityDataAsync(cancellationToken);
+        return string.Equals(serverData.Sku?.Name, tier, StringComparison.OrdinalIgnoreCase);
+    }
+
     private bool IsCapacityInState(FabricResourceState state, CancellationToken cancellationToken = default)
     {
         var serverData = GetCapacityData(cancellationToken);
@@ -163,23 +226,23 @@ public class FabricCapacityManager
         return serverData.Properties.State == state;
     }
 
-    private bool StartOperation(
-        FabricResourceState expectedState,
-        Func<WaitUntil, CancellationToken, ArmOperation> operation,
+    private bool StartOperation<TOperation>(
+        Func<CancellationToken, bool> isAlreadySatisfied,
+        Func<WaitUntil, CancellationToken, TOperation> operation,
         Action onStartHandler = null,
         CancellationToken cancellationToken = default
-    )
+    ) where TOperation : Operation
     {
         EnsureConfigured();
 
-        if (IsCapacityInState(expectedState, cancellationToken))
+        if (isAlreadySatisfied(cancellationToken))
         {
             return true;
         }
 
         using (_semaphore.Lock(cancellationToken))
         {
-            if (IsCapacityInState(expectedState, cancellationToken))
+            if (isAlreadySatisfied(cancellationToken))
             {
                 return true;
             }
@@ -199,23 +262,23 @@ public class FabricCapacityManager
         }
     }
 
-    private async Task<bool> StartOperationAsync(
-        FabricResourceState expectedState,
-        Func<WaitUntil, CancellationToken, Task<ArmOperation>> operation,
+    private async Task<bool> StartOperationAsync<TOperation>(
+        Func<CancellationToken, ValueTask<bool>> isAlreadySatisfied,
+        Func<WaitUntil, CancellationToken, Task<TOperation>> operation,
         Func<Task> onStartHandler = null,
         CancellationToken cancellationToken = default
-    )
+    ) where TOperation : Operation
     {
         EnsureConfigured();
 
-        if (await IsCapacityInStateAsync(expectedState, cancellationToken))
+        if (await isAlreadySatisfied(cancellationToken))
         {
             return true;
         }
 
         using (await _semaphore.LockAsync(cancellationToken))
         {
-            if (await IsCapacityInStateAsync(expectedState, cancellationToken))
+            if (await isAlreadySatisfied(cancellationToken))
             {
                 return true;
             }
