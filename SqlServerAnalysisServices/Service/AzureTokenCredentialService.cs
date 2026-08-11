@@ -17,6 +17,7 @@ public class AzureTokenCredentialService
         {
             GetClientSecretCredential(azureResource.TenantId, azureResource.ClientId, azureResource.ClientSecret),
             GetManagedIdentityCredential(azureResource.ManagedIdentityClientId),
+            GetDefaultCredential()
             //GetUsernamePasswordCredentials(azureResource.Username, azureResource.Password, azureResource.TenantId, azureResource.ClientId)
         };
 
@@ -37,9 +38,7 @@ public class AzureTokenCredentialService
             && !string.IsNullOrWhiteSpace(clientSecret)
         )
         {
-            var clientSecretCredential = _credentialCache.Get(clientSecretCacheKey) as ClientSecretCredential;
-
-            if (clientSecretCredential is null)
+            if (_credentialCache.Get(clientSecretCacheKey) is not ClientSecretCredential clientSecretCredential)
             {
                 clientSecretCredential = new ClientSecretCredential(tenantId, clientId, clientSecret);
                 _credentialCache.Set(clientSecretCacheKey, clientSecretCredential, ObjectCache.InfiniteAbsoluteExpiration);
@@ -51,17 +50,35 @@ public class AzureTokenCredentialService
         return null;
     }
 
+    /*
+        Picks up env vars:
+            * AZURE_TENANT_ID
+            * AZURE_CLIENT_ID (also works with MI; unset: system assigned, set: user assigned)
+            * AZURE_CLIENT_SECRET
+     */
+
+    private DefaultAzureCredential GetDefaultCredential()
+    {
+        const string defaultAzureCredentialCacheKey = "default";
+
+        if (_credentialCache.Get(defaultAzureCredentialCacheKey) is not DefaultAzureCredential defaultAzureCredential)
+        {
+            defaultAzureCredential = new DefaultAzureCredential();
+            _credentialCache.Set(defaultAzureCredentialCacheKey, defaultAzureCredential, ObjectCache.InfiniteAbsoluteExpiration);
+        }
+
+        return defaultAzureCredential;
+    }
+
     private ManagedIdentityCredential GetManagedIdentityCredential(string managedIdentityClientId)
     {
         var managedIdentityCacheKey = managedIdentityClientId;
 
         if (!string.IsNullOrWhiteSpace(managedIdentityClientId))
         {
-            var managedIdentityCredential = _credentialCache.Get(managedIdentityCacheKey) as ManagedIdentityCredential;
-
-            if (managedIdentityCredential is null)
+            if (_credentialCache.Get(managedIdentityCacheKey) is not ManagedIdentityCredential managedIdentityCredential)
             {
-                managedIdentityCredential = new ManagedIdentityCredential(managedIdentityClientId);
+                managedIdentityCredential = new ManagedIdentityCredential(ManagedIdentityId.FromUserAssignedClientId(managedIdentityClientId));
                 _credentialCache.Set(managedIdentityCacheKey, managedIdentityCredential, ObjectCache.InfiniteAbsoluteExpiration);
             }
 

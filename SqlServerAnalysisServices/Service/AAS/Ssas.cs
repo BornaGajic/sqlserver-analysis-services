@@ -216,7 +216,11 @@ public class Ssas : ISsas
         return connection.ExecuteScalar<T>(query, cancellationToken);
     }
 
-    public virtual async Task<bool> ScaleAsync(string skuTier, CancellationToken cancellationToken = default)
+    public virtual Task<bool> ScaleAsync(string skuTier, CancellationToken cancellationToken = default)
+        => ScaleAsync(skuTier, withShutdown: false, cancellationToken);
+
+    // An Azure Analysis Services server accepts a SKU change while running, so withShutdown is ignored here.
+    public virtual async Task<bool> ScaleAsync(string skuTier, bool withShutdown, CancellationToken cancellationToken = default)
     {
         if (IsProcessing(cancellation: cancellationToken))
         {

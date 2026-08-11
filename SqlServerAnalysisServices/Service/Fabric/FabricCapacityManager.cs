@@ -114,11 +114,7 @@ public class FabricCapacityManager
     )
     {
         EnsureConfigured();
-
-        if (string.IsNullOrWhiteSpace(tier))
-        {
-            throw new ArgumentException("A target tier (SKU) must be provided to scale the capacity.", nameof(tier));
-        }
+        EnsureTier(tier);
 
         var patch = new FabricCapacityPatch
         {
@@ -135,31 +131,33 @@ public class FabricCapacityManager
 
     public virtual async Task<bool> ScaleAsync(
         string tier,
+        bool withShutdown = false,
         Func<Task> onStartHandler = null,
         CancellationToken cancellationToken = default)
     {
         EnsureConfigured();
-
-        if (string.IsNullOrWhiteSpace(tier))
-        {
-            throw new ArgumentException("A target tier (SKU) must be provided to scale the capacity.", nameof(tier));
-        }
+        EnsureTier(tier);
 
         var patch = new FabricCapacityPatch
         {
             Sku = new FabricSku(tier, FabricSkuTier.Fabric)
         };
 
+        // A shutdown scale drives its own suspend/resume steps to completion, so it ignores the caller's waitUntil.
+        Func<WaitUntil, CancellationToken, Task<ArmOperation<FabricCapacityResource>>> scale = withShutdown
+            ? (_, ct) => ScaleWithShutdownAsync(patch, ct)
+            : (waitUntil, ct) => UpdateCapacityAsync(waitUntil, patch, ct);
+
         return await StartOperationAsync(
             ct => IsCapacityAtTierAsync(tier, ct),
-            (waitUntil, ct) => FabricResource.Value.UpdateAsync(waitUntil, patch, ct),
+            scale,
             onStartHandler,
             cancellationToken
         );
     }
 
     public virtual async Task<bool> SuspendAsync(
-                Func<Task> onStartHandler = null,
+        Func<Task> onStartHandler = null,
         CancellationToken cancellationToken = default)
     {
         EnsureConfigured();
@@ -172,27 +170,23 @@ public class FabricCapacityManager
         );
     }
 
-    private static bool IsConfiguredAzureResource(AzureResource azure)
+    protected virtual Task<ArmOperation<FabricCapacityResource>> UpdateCapacityAsync(
+        WaitUntil waitUntil,
+        FabricCapacityPatch patch,
+        CancellationToken cancellationToken
+    ) => FabricResource.Value.UpdateAsync(waitUntil, patch, cancellationToken);
+
+    private static void EnsureTier(string tier)
     {
-        if (azure is null)
+        if (string.IsNullOrWhiteSpace(tier))
         {
-            return false;
+            throw new ArgumentException("A target tier (SKU) must be provided to scale the capacity.", nameof(tier));
         }
-
-        var hasResource =
-            !string.IsNullOrWhiteSpace(azure.SubscriptionId)
-            && !string.IsNullOrWhiteSpace(azure.ResourceGroupName)
-            && !string.IsNullOrWhiteSpace(azure.ResourceName);
-
-        var hasClientSecret =
-            !string.IsNullOrWhiteSpace(azure.TenantId)
-            && !string.IsNullOrWhiteSpace(azure.ClientId)
-            && !string.IsNullOrWhiteSpace(azure.ClientSecret);
-
-        var hasManagedIdentity = !string.IsNullOrWhiteSpace(azure.ManagedIdentityClientId);
-
-        return hasResource && (hasClientSecret || hasManagedIdentity);
     }
+
+    // Configured when the resource coordinates are present and it can authenticate via a client secret or a managed identity.
+    private static bool IsConfiguredAzureResource(AzureResource azure) =>
+        azure.IsValidResource() && (azure.IsValidClient() || azure.IsValidManagedIdentity());
 
     private void EnsureConfigured()
     {
@@ -224,6 +218,39 @@ public class FabricCapacityManager
     {
         var serverData = await GetCapacityDataAsync(cancellationToken);
         return serverData.Properties.State == state;
+    }
+
+    // Some capacities reject a SKU change while running, so each step of the pause/scale/resume sequence is awaited to completion.
+    private async Task<ArmOperation<FabricCapacityResource>> ScaleWithShutdownAsync(
+        FabricCapacityPatch patch,
+        CancellationToken cancellationToken
+    )
+    {
+        // Only a running capacity gets resumed afterwards; one that is paused (or pausing) stays that way rather than billing on.
+        var pause = await IsCapacityInStateAsync(FabricResourceState.Active, cancellationToken);
+        var paused = false;
+
+        try
+        {
+            if (pause)
+            {
+                await FabricResource.Value.SuspendAsync(WaitUntil.Completed, cancellationToken);
+                paused = true;
+            }
+
+            return await UpdateCapacityAsync(WaitUntil.Completed, patch, cancellationToken);
+        }
+        finally
+        {
+            // Never skip the resume because the caller cancelled — the capacity was running before we paused it.
+            if (paused)
+            {
+                await FabricResource.Value.ResumeAsync(WaitUntil.Completed);
+            }
+
+            // A failed scale never reaches the caller's cache invalidation, so the state this sequence changed is dropped here.
+            _memoryCache.Remove(CapacityDataCacheKey);
+        }
     }
 
     private bool StartOperation<TOperation>(

@@ -41,6 +41,8 @@ public interface ISsas
 
     Task<bool> ScaleAsync(string skuTier, CancellationToken cancellationToken = default);
 
+    Task<bool> ScaleAsync(string skuTier, bool withShutdown, CancellationToken cancellationToken = default);
+
     ValueTask<string> SendXmlaRequestAsync(XmlaSoapRequest request, CancellationToken cancellationToken = default);
 
     bool StartServer(CancellationToken cancellationToken = default);
