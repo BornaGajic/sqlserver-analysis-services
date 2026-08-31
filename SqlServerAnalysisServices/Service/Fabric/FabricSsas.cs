@@ -1,13 +1,21 @@
 ﻿using Microsoft.AnalysisServices.AdomdClient;
 using Microsoft.AnalysisServices.Tabular;
 using Microsoft.Extensions.Options;
+using SqlServerAnalysisServices.Extensions;
+using Microsoft.PowerBI.Api;
 using SqlServerAnalysisServices.Model;
 using SqlServerAnalysisServices.Settings;
 
 namespace SqlServerAnalysisServices.Service;
 
+/// <summary>
+/// A dataset's last-known refresh status, as reported by the Power BI Admin "Get Refreshables" API.
+/// </summary>
+public sealed record FabricRefreshStatus(string Name, string Status);
+
 public class FabricSsas : Ssas
 {
+    private const string PowerBiApiBaseUrl = "https://api.powerbi.com";
     private readonly FabricCapacityManager _fabricManager;
     private readonly SsasConnection _ssasConnection;
 
@@ -19,6 +27,27 @@ public class FabricSsas : Ssas
     {
         _fabricManager = fabricManager;
         _ssasConnection = ssasConnection;
+    }
+
+    // Power BI's "Cancel Refresh" REST API only cancels REST-triggered "enhanced refresh" jobs. Refreshes in
+    // this codebase are issued via Process()/XMLA (see SemanticModelRefreshExecutor), which never creates one,
+    // so there is no REST call that can cancel them. DISCOVER_SESSIONS/DISCOVER_LOCKS also don't reliably
+    // expose a real SPID on Fabric, so falling through to base.CancelProcessing would call CancelSession with
+    // a synthetic SPID against an unrelated session. There is currently no safe way to cancel a specific
+    // Fabric-hosted refresh from here; a refresh triggered via Process() should be cancelled using that call's
+    // own CancellationToken instead.
+    public override void CancelProcessing(string databaseName, CancellationToken cancellation = default)
+    {
+        if (!IsFabricPowerBIEndpoint())
+        {
+            base.CancelProcessing(databaseName, cancellation);
+            return;
+        }
+
+        throw new NotSupportedException(
+            $"Cancelling processing for '{databaseName}' is not supported against a Fabric/Power BI Premium XMLA endpoint. " +
+            "Refreshes triggered via Process()/XMLA must be cancelled using that call's own CancellationToken."
+        );
     }
 
     public override async ValueTask<SsasServer> GetServerDetailsAsync(CancellationToken cancellation = default)
@@ -48,6 +77,28 @@ public class FabricSsas : Ssas
             LastModifiedBy = capacity.SystemData?.LastModifiedBy,
             Administrators = capacity.Properties?.AdministrationMembers
         };
+    }
+
+    // $SYSTEM.DISCOVER_LOCKS does not report meaningful data against a Fabric/Power BI Premium XMLA endpoint, so
+    // processing state is derived from the Power BI Admin "Get Refreshables" API instead.
+    public override IEnumerable<SsasLock> GetSsasLocks(string databaseName = null, CancellationToken cancellation = default)
+    {
+        if (!IsFabricPowerBIEndpoint())
+        {
+            return base.GetSsasLocks(databaseName, cancellation);
+        }
+
+        var statuses = GetRefreshStatuses(cancellation);
+
+        return statuses
+            .Where(status => string.IsNullOrWhiteSpace(databaseName) || string.Equals(status.Name, databaseName, StringComparison.OrdinalIgnoreCase))
+            .Where(IsRefreshInProgress)
+            .Select(status => new SsasLock
+            {
+                LOCK_TYPE = SsasLockType.LOCK_WRITE,
+                Session = new SsasSession { SESSION_CURRENT_DATABASE = status.Name }
+            })
+            .ToList();
     }
 
     public override bool PauseServer(CancellationToken cancellationToken = default)
@@ -128,12 +179,35 @@ public class FabricSsas : Ssas
         return base.GetConnection();
     }
 
+    /// <summary>
+    /// Queries the Power BI Admin "Get Refreshables" API for each dataset's last refresh status.
+    /// </summary>
+    protected internal IReadOnlyList<FabricRefreshStatus> GetRefreshStatuses(CancellationToken cancellation = default)
+    {
+        var token = _ssasConnection.GetAzureSsasTokenCredential().GetPowerBiToken(cancellation);
+        var client = new PowerBIClient(token.Token, new Uri(PowerBiApiBaseUrl));
+
+        var response = client.Admin.GetRefreshables(
+            top: 100,
+            filter: "lastRefresh ne null",
+            cancellationToken: cancellation
+        );
+
+        return response.Value.Value
+            .Select(refreshable => new FabricRefreshStatus(refreshable.Name, refreshable.LastRefresh?.Status))
+            .ToList();
+    }
+
     protected internal override Server GetServer(bool propertiesOnly = false)
     {
         EnsureCapacityAvailable();
 
         return base.GetServer(propertiesOnly);
     }
+
+    private static bool IsRefreshInProgress(FabricRefreshStatus status) =>
+        status.Status?.Equals("Unknown", StringComparison.OrdinalIgnoreCase) == true ||
+        status.Status?.Contains("progress", StringComparison.OrdinalIgnoreCase) == true;
 
     private void EnsureCapacityAvailable()
     {
