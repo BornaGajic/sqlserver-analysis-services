@@ -4,7 +4,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Reflection;
-using Xunit.Abstractions;
+using Xunit;
 
 namespace SqlServerAnalysisServices.Test;
 
@@ -46,6 +46,14 @@ public abstract class TestSetup
     private class NullTestOutputHelper : ITestOutputHelper
     {
         public static NullTestOutputHelper Instance = new();
+
+        public string Output => string.Empty;
+
+        public void Write(string message)
+        { }
+
+        public void Write(string format, params object[] args)
+        { }
 
         public void WriteLine(string message)
         { }

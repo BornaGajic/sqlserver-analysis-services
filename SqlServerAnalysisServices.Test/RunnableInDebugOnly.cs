@@ -1,15 +1,18 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using Xunit;
 
 namespace SqlServerAnalysisServices.Test;
 
 public class RunnableInDebugOnlyAttribute : FactAttribute
 {
-    public RunnableInDebugOnlyAttribute()
+    public RunnableInDebugOnlyAttribute([CallerFilePath] string? sourceFilePath = null, [CallerLineNumber] int sourceLineNumber = -1)
+        : base(sourceFilePath, sourceLineNumber)
     {
-        if (!Debugger.IsAttached)
-        {
-            Skip = "Only running in interactive mode.";
-        }
+        Skip = "Only running in interactive mode.";
+        SkipType = typeof(RunnableInDebugOnlyAttribute);
+        SkipUnless = nameof(DebuggerAttached);
     }
+
+    public static bool DebuggerAttached => Debugger.IsAttached;
 }
